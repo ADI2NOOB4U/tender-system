@@ -1,0 +1,26 @@
+User (Next.js - Vercel)
+        ↓
+Cloudflare (WAF + CDN + Rate Limiting)
+        ↓
+FastAPI Backend (Render)
+        ↓
+Auth Middleware (Firebase JWT)
+        ↓
+-----------------------------------
+| Core Services                   |
+| Upload | Evaluation | Workflow |
+| Audit  | Logging               |
+-----------------------------------
+        ↓
+-----------------------------------
+| Async Layer                    |
+| Redis + Celery                |
+-----------------------------------
+        ↓
+AI Layer (OCR + LLM + Rules)
+        ↓
+-----------------------------------
+| Data Layer                     |
+| PostgreSQL (Supabase)         |
+| Cloudflare R2 (Storage)       |
+-----------------------------------

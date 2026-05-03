@@ -1,0 +1,55 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --gov-navy: #1a3a5c;
+  --gov-blue: #2c5f8a;
+  --gov-border: #d1d5db;
+  --gov-bg: #f9fafb;
+}
+
+html {
+  font-family: Georgia, 'Times New Roman', serif;
+  background-color: #f3f4f6;
+  color: #1f2937;
+}
+
+body {
+  -webkit-font-smoothing: antialiased;
+}
+
+@layer components {
+  .gov-card {
+    @apply bg-white border border-gray-200 shadow-sm rounded-none;
+  }
+  .gov-label {
+    @apply text-xs font-semibold uppercase tracking-widest text-gray-500;
+  }
+  .gov-btn-primary {
+    @apply bg-gov-navy text-white px-6 py-2.5 text-sm font-semibold tracking-wide
+           border border-gov-navy hover:bg-gov-blue transition-colors duration-150
+           disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+  .gov-section-title {
+    @apply text-sm font-bold uppercase tracking-widest text-gov-navy border-b border-gray-200 pb-2 mb-4;
+  }
+}
+
+/* Subtle pulsing dot for processing */
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+.blink { animation: blink 1.4s ease-in-out infinite; }
+
+/* Scrollable code box */
+.ocr-scroll {
+  font-family: 'Courier New', monospace;
+  font-size: 0.78rem;
+  line-height: 1.6;
+  max-height: 260px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
