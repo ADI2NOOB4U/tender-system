@@ -17,7 +17,7 @@ export default function Home() {
 
     const formData = new FormData();
 
-    // 🔥 IMPORTANT: backend expects "files"
+    // ✅ backend expects "files"
     Array.from(files).forEach((file) => {
       formData.append("files", file);
     });
@@ -31,11 +31,21 @@ export default function Home() {
         }
       );
 
-      const data = await res.json();
+      console.log("STATUS:", res.status);
+
+      const text = await res.text(); // 👈 IMPORTANT
+      console.log("RAW RESPONSE:", text);
+
+      if (!res.ok) {
+        throw new Error(text);
+      }
+
+      const data = JSON.parse(text);
       setResponse(data);
+
     } catch (err) {
-      console.error(err);
-      alert("Upload failed");
+      console.error("ERROR:", err);
+      alert("Upload failed — check console");
     }
 
     setLoading(false);
