@@ -64,8 +64,6 @@ export default function Home() {
         if (jobData) settled.push(jobData);
       }
       setAllResults(settled);
-      localStorage.setItem("tenderResults", JSON.stringify(settled));
-      window.location.href = "/reports";
     } catch (err) {
       console.error("ERROR:", err);
       alert("Upload failed — check console");
