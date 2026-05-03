@@ -95,9 +95,7 @@ export default function Home() {
           <h2>Evaluation Result</h2>
 
           <div style={{ background: "#f3f4f6", padding: "20px", borderRadius: "10px" }}>
-            <p><b>Score:</b> {response.result.score}</p>
-            <p><b>Company:</b> {response.result.company}</p>
-            <p><b>Eligibility:</b> {response.result.eligibility}</p>
+            <pre>{JSON.stringify(response.result, null, 2)}</pre>
           </div>
         </div>
       )}
