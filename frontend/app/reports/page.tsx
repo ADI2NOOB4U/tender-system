@@ -8,7 +8,10 @@ export default function ReportsPage() {
     const exportPDF = async () => {
         const element = document.getElementById("report-section");
 
-        if (!element) return alert("Nothing to export");
+        if (!element) {
+            alert("Nothing to export");
+            return;
+        }
 
         const canvas = await html2canvas(element);
         const imgData = canvas.toDataURL("image/png");
@@ -62,6 +65,15 @@ export default function ReportsPage() {
       <h1 style={{ fontSize: "24px", fontWeight: "bold" }}>
         📊 Tender Reports
       </h1>
+            <h1 style={{ fontSize: "24px", fontWeight: "bold" }}>
+        📊 Tender Reports
+        </h1>
+
+        <div style={{ marginTop: "15px", marginBottom: "15px" }}>
+        <button onClick={exportPDF}>
+            📄 Export PDF
+        </button>
+        </div>
 
       {/* 🔥 BATCH SELECTOR */}
       <div style={{ marginTop: "20px", marginBottom: "20px" }}>
@@ -85,13 +97,21 @@ export default function ReportsPage() {
 
       {/* 🔥 RESULTS UI */}
       {parsedResults.length > 0 && (
+        <div id="report-section">
         <ResultsUI
-          parsedResults={parsedResults}
-          filteredResults={filteredResults}
-          winner={winner}
-          minScore={minScore}
-          setMinScore={setMinScore}
+            parsedResults={parsedResults}
+            filteredResults={filteredResults}
+            winner={winner}
+            minScore={minScore}
+            setMinScore={setMinScore}
         />
+        </div>
+      )}
+
+      {parsedResults.length === 0 && (
+        <div style={{ marginTop: "30px", fontStyle: "italic" }}>
+          No data available for the selected batch.
+        </div>
       )}
     </div>
   );
