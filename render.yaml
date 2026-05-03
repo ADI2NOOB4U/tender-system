@@ -21,3 +21,6 @@ services:
         value: YOUR_UPSTASH_URL
       - key: OPENAI_API_KEY
         value: YOUR_OPENAI_KEY
+  envVars:
+  - key: PYTHON_VERSION
+    value: 3.11.9
