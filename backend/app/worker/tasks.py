@@ -1,3 +1,5 @@
+# app/worker/tasks.py
+
 from app.worker.celery_app import celery
 from app.services.explainer import generate_explanation
 from app.db.redis_client import update_job
@@ -6,34 +8,36 @@ from app.services.llm import extract_invoice_data
 from app.services.rules import evaluate_tender
 
 
-@celery.task(bind=True, autoretry_for=(Exception,), retry_backoff=5, retry_kwargs={"max_retries": 3})
-def process_document(self, job_id, file_path):
+@celery.task(
+    bind=True,
+    autoretry_for=(Exception,),
+    retry_backoff=5,
+    retry_kwargs={"max_retries": 3}
+)
+def process_document(self, job_id: str, file_path: str):
     try:
-        # START
+        # 🔹 START
         update_job(job_id, {"status": "processing"})
 
-        # OCR
-        update_job(job_id, {"status": "ocr"})
+        # 🔹 OCR
         text = extract_text(file_path) or ""
 
-        # EXTRACTION
-        update_job(job_id, {"status": "extracting"})
+        # 🔹 EXTRACTION
         structured = extract_invoice_data(text) or {}
 
-        # EVALUATION
-        update_job(job_id, {"status": "evaluating"})
+        # 🔹 EVALUATION
         evaluation = evaluate_tender(structured) or {}
 
-        # NORMALIZE
+        # 🔹 NORMALIZE STATUS
         status = str(evaluation.get("status", "review")).upper()
 
-        # EXPLANATION (safe)
+        # 🔹 EXPLANATION (SAFE)
         try:
             explanation = generate_explanation(structured, evaluation)
         except Exception:
             explanation = "Explanation unavailable."
 
-        # FINAL RESULT
+        # 🔹 FINAL RESULT
         update_job(job_id, {
             "status": "done",
             "result": {
@@ -47,9 +51,9 @@ def process_document(self, job_id, file_path):
         })
 
     except Exception as e:
-        # FAIL SAFE
+        # 🔥 FAIL SAFE
         update_job(job_id, {
             "status": "failed",
             "error": str(e)
         })
-        raise 
+        raise
