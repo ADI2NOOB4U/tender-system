@@ -17,7 +17,6 @@ if REDIS_URL:
         r = redis.from_url(
             REDIS_URL,
             decode_responses=True,
-            ssl=True  # 🔥 IMPORTANT FOR UPSTASH
         )
 
         r.ping()  # verify connection
