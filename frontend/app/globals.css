@@ -2,6 +2,7 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ── ROOT ── */
 :root {
   --gov-navy: #1a3a5c;
   --gov-blue: #2c5f8a;
@@ -9,47 +10,132 @@
   --gov-bg: #f9fafb;
 }
 
+/* ── BASE ── */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
 html {
-  font-family: Georgia, 'Times New Roman', serif;
-  background-color: #f3f4f6;
-  color: #1f2937;
+  font-family: 'DM Sans', sans-serif;
+  background-color: #f0f2f7;
+  color: #1a1f36;
 }
 
 body {
   -webkit-font-smoothing: antialiased;
 }
 
-@layer components {
-  .gov-card {
-    @apply bg-white border border-gray-200 shadow-sm rounded-none;
-  }
-  .gov-label {
-    @apply text-xs font-semibold uppercase tracking-widest text-gray-500;
-  }
-  .gov-btn-primary {
-    @apply bg-gov-navy text-white px-6 py-2.5 text-sm font-semibold tracking-wide
-           border border-gov-navy hover:bg-gov-blue transition-colors duration-150
-           disabled:opacity-50 disabled:cursor-not-allowed;
-  }
-  .gov-section-title {
-    @apply text-sm font-bold uppercase tracking-widest text-gov-navy border-b border-gray-200 pb-2 mb-4;
-  }
+/* ── NAVBAR ── */
+.navbar {
+  background: #0f1c3f;
+  padding: 0 32px;
+  height: 60px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
 }
 
-/* Subtle pulsing dot for processing */
-@keyframes blink {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.3; }
+.navbar-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
-.blink { animation: blink 1.4s ease-in-out infinite; }
 
-/* Scrollable code box */
-.ocr-scroll {
-  font-family: 'Courier New', monospace;
-  font-size: 0.78rem;
-  line-height: 1.6;
-  max-height: 260px;
-  overflow-y: auto;
-  white-space: pre-wrap;
-  word-break: break-word;
+.navbar-emblem {
+  width: 34px;
+  height: 34px;
+  background: linear-gradient(135deg,#f59e0b,#fbbf24);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.navbar-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: #fff;
+}
+
+.navbar-clock {
+  color: #fbbf24;
+  font-family: monospace;
+}
+
+/* ── PAGE ── */
+.page {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 36px 24px;
+}
+
+/* ── UPLOAD ── */
+.upload-card {
+  background: #fff;
+  border-radius: 16px;
+  padding: 28px;
+  border: 1px solid #e8eaf2;
+}
+
+/* ── BUTTON ── */
+.submit-btn {
+  margin-top: 20px;
+  width: 100%;
+  padding: 14px;
+  background: #2563eb;
+  color: #fff;
+  border-radius: 10px;
+}
+
+/* ── WINNER ── */
+.winner-card {
+  background: #1e3a8a;
+  color: #fff;
+  padding: 20px;
+  border-radius: 10px;
+}
+
+/* ── FILTER ── */
+.filter-bar {
+  margin: 20px 0;
+}
+
+/* ── RANKING ── */
+.rank-card {
+  background: #fff;
+  border-radius: 10px;
+  padding: 15px;
+  margin-bottom: 10px;
+  border: 1px solid #ddd;
+}
+
+/* ── BAR ── */
+.bar-track {
+  height: 8px;
+  background: #eee;
+}
+
+.bar-fill {
+  height: 100%;
+}
+
+/* ── DEBUG ── */
+.debug-card {
+  margin-top: 20px;
+  background: #1e293b;
+  padding: 20px;
+}
+
+.debug-pre {
+  color: #94a3b8;
+}
+
+/* ── FOOTER ── */
+.footer {
+  text-align: center;
+  margin-top: 40px;
 }

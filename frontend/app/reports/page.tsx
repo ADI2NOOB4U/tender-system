@@ -1,25 +1,31 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import ResultsUI from "../../components/ResultsUI";
 
 export default function ReportsPage() {
-  const [results, setResults] = useState<any[]>([]);
+  const [batches, setBatches] = useState<any[]>([]);
+  const [selectedBatch, setSelectedBatch] = useState<number | null>(null);
   const [minScore, setMinScore] = useState(0);
 
+  // 🔥 LOAD HISTORY
   useEffect(() => {
     const stored = localStorage.getItem("tenderHistory");
 
-        if (stored) {
-        const history = JSON.parse(stored);
-
-        // flatten all results
-        const allData = history.flatMap(item => item.data);
-
-        setResults(allData);
-        }
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      setBatches(parsed);
+    }
   }, []);
 
-  const parsedResults = results
+  // 🔥 SELECT DATA
+  const selectedData =
+    selectedBatch !== null
+      ? batches[selectedBatch]?.data ?? []
+      : batches.flatMap((b) => b.data ?? []);
+
+  // 🔥 PARSE DATA (same as page.tsx)
+  const parsedResults = selectedData
     .filter((r) => r?.result)
     .map((r) => ({
       company: r.result.extracted_data?.company ?? "Unknown",
@@ -32,19 +38,6 @@ export default function ReportsPage() {
 
   const filteredResults = parsedResults.filter((r) => r.score >= minScore);
   const winner = parsedResults[0] ?? null;
-  const maxScore = parsedResults[0]?.score ?? 100;
-
-  const medals = ["🥇", "🥈", "🥉"];
-
-  const scoreColor = (s: number) =>
-    s >= 75 ? "#16a34a" : s >= 50 ? "#d97706" : "#dc2626";
-
-  const scoreGradient = (s: number) =>
-    s >= 75
-      ? "linear-gradient(90deg,#16a34a,#22c55e)"
-      : s >= 50
-      ? "linear-gradient(90deg,#d97706,#f59e0b)"
-      : "linear-gradient(90deg,#dc2626,#ef4444)";
 
   return (
     <div style={{ padding: "30px" }}>
@@ -52,76 +45,35 @@ export default function ReportsPage() {
         📊 Tender Reports
       </h1>
 
+      {/* 🔥 BATCH SELECTOR */}
+      <div style={{ marginTop: "20px", marginBottom: "20px" }}>
+        <label style={{ marginRight: "10px" }}>📦 Select Batch:</label>
+
+        <select
+          onChange={(e) => {
+            const val = e.target.value;
+            setSelectedBatch(val === "" ? null : Number(val));
+          }}
+        >
+          <option value="">All Batches</option>
+
+          {batches.map((_, index) => (
+            <option key={index} value={index}>
+              Batch {index + 1}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      {/* 🔥 RESULTS UI */}
       {parsedResults.length > 0 && (
-        <>
-          {/* WINNER */}
-          {winner && (
-            <div style={{
-              background: "#1e3a8a",
-              color: "white",
-              padding: "20px",
-              borderRadius: "10px",
-              marginTop: "20px"
-            }}>
-              <h2>🏆 {winner.company}</h2>
-              <p>Score: {winner.score}</p>
-            </div>
-          )}
-
-          {/* FILTER */}
-          <div style={{ marginTop: "20px" }}>
-            <input
-              type="range"
-              min={0}
-              max={100}
-              value={minScore}
-              onChange={(e) => setMinScore(Number(e.target.value))}
-            />
-            <span style={{ marginLeft: "10px" }}>{minScore}+</span>
-          </div>
-
-          {/* RANKING */}
-          <div style={{ marginTop: "20px" }}>
-            {filteredResults.map((r, idx) => {
-              const barPct = (r.score / maxScore) * 100;
-
-              return (
-                <div key={idx} style={{
-                  padding: "15px",
-                  border: "1px solid #ddd",
-                  borderRadius: "10px",
-                  marginBottom: "10px"
-                }}>
-                  <b>
-                    {medals[idx] ?? `${idx + 1}.`} {r.company}
-                  </b>
-
-                  <div>Score: {r.score}</div>
-
-                  <div style={{
-                    height: "8px",
-                    background: "#eee",
-                    borderRadius: "5px",
-                    marginTop: "5px"
-                  }}>
-                    <div style={{
-                      width: `${barPct}%`,
-                      height: "100%",
-                      background: scoreGradient(r.score),
-                      borderRadius: "5px"
-                    }} />
-                  </div>
-
-                  {r.explanation && (
-                    <p style={{ marginTop: "10px", fontSize: "13px" }}>
-                      {r.explanation}
-                    </p>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </>
+        <ResultsUI
+          parsedResults={parsedResults}
+          filteredResults={filteredResults}
+          winner={winner}
+          minScore={minScore}
+          setMinScore={setMinScore}
+        />
       )}
     </div>
   );
