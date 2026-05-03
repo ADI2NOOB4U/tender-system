@@ -95,7 +95,31 @@ export default function Home() {
           <h2>Evaluation Result</h2>
 
           <div style={{ background: "#f3f4f6", padding: "20px", borderRadius: "10px" }}>
-            <pre>{JSON.stringify(response.result, null, 2)}</pre>
+                {response?.result && (
+      <div style={{ marginTop: "30px" }}>
+        <h2>Evaluation Result</h2>
+
+        <div style={{
+          background: "#f3f4f6",
+          padding: "20px",
+          borderRadius: "10px",
+          maxWidth: "500px"
+        }}>
+          <p><b>Company:</b> {response.result.extracted_data?.company}</p>
+          <p><b>Amount:</b> ₹{response.result.extracted_data?.amount}</p>
+
+          <hr />
+
+          <p><b>Score:</b> {response.result.evaluation?.score}</p>
+          <p><b>Status:</b> {response.result.evaluation?.status}</p>
+
+          <hr />
+
+          <p><b>AI Explanation:</b></p>
+          <p>{response.result.explanation}</p>
+        </div>
+      </div>
+    )}
           </div>
         </div>
       )}
