@@ -5,3 +5,4 @@ pillow
 pytesseract
 celery
 redis
+python-dotenv
