@@ -7,6 +7,8 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const [response, setResponse] = useState<any>(null);
 
+  const API_URL = "https://tender-system-md8s.onrender.com";
+
   const handleUpload = async () => {
     if (!files || files.length === 0) {
       alert("Please select at least one file");
@@ -14,34 +16,44 @@ export default function Home() {
     }
 
     setLoading(true);
+    setResponse(null);
 
     const formData = new FormData();
 
-    // ✅ backend expects "files"
     Array.from(files).forEach((file) => {
       formData.append("files", file);
     });
 
     try {
-      const res = await fetch(
-        "https://tender-system-md8s.onrender.com/upload-batch",
-        {
-          method: "POST",
-          body: formData,
-        }
-      );
+      // STEP 1: Upload
+      const res = await fetch(`${API_URL}/upload-batch`, {
+        method: "POST",
+        body: formData,
+      });
 
-      console.log("STATUS:", res.status);
-
-      const text = await res.text(); // 👈 IMPORTANT
-      console.log("RAW RESPONSE:", text);
-
-      if (!res.ok) {
-        throw new Error(text);
-      }
+      const text = await res.text();
+      if (!res.ok) throw new Error(text);
 
       const data = JSON.parse(text);
-      setResponse(data);
+
+      // STEP 2: Get job ID
+      const jobId = data.jobs?.[0];
+      if (!jobId) throw new Error("No job ID returned");
+
+      // STEP 3: Fetch result
+      let jobData;
+
+      // small polling (because processing might take time)
+      for (let i = 0; i < 5; i++) {
+        const jobRes = await fetch(`${API_URL}/job/${jobId}`);
+        jobData = await jobRes.json();
+
+        if (jobData.status === "done") break;
+
+        await new Promise((r) => setTimeout(r, 1000)); // wait 1 sec
+      }
+
+      setResponse(jobData);
 
     } catch (err) {
       console.error("ERROR:", err);
@@ -77,9 +89,23 @@ export default function Home() {
         {loading ? "Processing..." : "Submit Tender Document"}
       </button>
 
-      {response && (
+      {/* ✅ CLEAN RESULT UI */}
+      {response?.result && (
         <div style={{ marginTop: "30px" }}>
-          <h2>Response:</h2>
+          <h2>Evaluation Result</h2>
+
+          <div style={{ background: "#f3f4f6", padding: "20px", borderRadius: "10px" }}>
+            <p><b>Score:</b> {response.result.score}</p>
+            <p><b>Company:</b> {response.result.company}</p>
+            <p><b>Eligibility:</b> {response.result.eligibility}</p>
+          </div>
+        </div>
+      )}
+
+      {/* fallback debug */}
+      {response && !response.result && (
+        <div style={{ marginTop: "20px" }}>
+          <h3>Raw Response (debug)</h3>
           <pre>{JSON.stringify(response, null, 2)}</pre>
         </div>
       )}
