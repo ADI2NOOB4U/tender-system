@@ -7,10 +7,16 @@ export default function ReportsPage() {
   const [minScore, setMinScore] = useState(0);
 
   useEffect(() => {
-    const stored = localStorage.getItem("tenderResults");
-    if (stored) {
-      setResults(JSON.parse(stored));
-    }
+    const stored = localStorage.getItem("tenderHistory");
+
+        if (stored) {
+        const history = JSON.parse(stored);
+
+        // flatten all results
+        const allData = history.flatMap(item => item.data);
+
+        setResults(allData);
+        }
   }, []);
 
   const parsedResults = results
