@@ -1,5 +1,3 @@
-# app/db/redis_client.py
-
 import redis
 import os
 import json
@@ -9,15 +7,22 @@ REDIS_URL = os.getenv("REDIS_URL")
 
 
 # =========================
-# INIT REDIS (SAFE)
+# INIT REDIS (SAFE + TLS)
 # =========================
 
 r = None
 
 if REDIS_URL:
     try:
-        r = redis.from_url(REDIS_URL, decode_responses=True)
-        r.ping()  # 🔥 verify connection
+        r = redis.from_url(
+            REDIS_URL,
+            decode_responses=True,
+            ssl=True  # 🔥 IMPORTANT FOR UPSTASH
+        )
+
+        r.ping()  # verify connection
+        print("✅ Redis connected")
+
     except Exception as e:
         print(f"⚠️ Redis connection failed: {e}")
         r = None
@@ -53,4 +58,4 @@ def get_job(job_id: str):
 def update_job(job_id: str, update_data: dict):
     job = get_job(job_id) or {}
     job.update(update_data)
-    set_job(job_id, job)          
+    set_job(job_id, job)
