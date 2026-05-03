@@ -1,10 +1,28 @@
 "use client";
-
+import jsPDF from "jspdf";
+import html2canvas from "html2canvas";
 import { useEffect, useState } from "react";
 import ResultsUI from "../../components/ResultsUI";
 
 export default function ReportsPage() {
-  const [batches, setBatches] = useState<any[]>([]);
+    const exportPDF = async () => {
+        const element = document.getElementById("report-section");
+
+        if (!element) return alert("Nothing to export");
+
+        const canvas = await html2canvas(element);
+        const imgData = canvas.toDataURL("image/png");
+
+        const pdf = new jsPDF("p", "mm", "a4");
+
+        const pageWidth = pdf.internal.pageSize.getWidth();
+        const imgWidth = pageWidth - 20;
+        const imgHeight = (canvas.height * imgWidth) / canvas.width;
+
+        pdf.addImage(imgData, "PNG", 10, 10, imgWidth, imgHeight);
+        pdf.save("tender-report.pdf");
+        };
+    const [batches, setBatches] = useState<any[]>([]);
   const [selectedBatch, setSelectedBatch] = useState<number | null>(null);
   const [minScore, setMinScore] = useState(0);
 
