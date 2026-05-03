@@ -1,8 +1,7 @@
-from dotenv import load_dotenv
 import os
-
-# 🔥 LOAD ENV FIRST (VERY IMPORTANT)
-load_dotenv()
+from dotenv import load_dotenv
+if os.getenv("ENV") != "production":
+    load_dotenv()
 
 print("REDIS_URL:", os.getenv("REDIS_URL"))
 

@@ -4,6 +4,9 @@ import json
 
 REDIS_URL = os.getenv("REDIS_URL")
 
+if not REDIS_URL:
+    raise ValueError("REDIS_URL not set")
+
 r = redis.from_url(REDIS_URL, decode_responses=True)
 
 
