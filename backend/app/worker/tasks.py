@@ -6,29 +6,32 @@ from app.services.llm import extract_invoice_data
 from app.services.rules import evaluate_tender
 
 
-@celery.task
-def process_document(job_id, file_path):
+@celery.task(bind=True, autoretry_for=(Exception,), retry_backoff=5, retry_kwargs={"max_retries": 3})
+def process_document(self, job_id, file_path):
     try:
         # START
         update_job(job_id, {"status": "processing"})
 
         # OCR
         update_job(job_id, {"status": "ocr"})
-        text = extract_text(file_path)
+        text = extract_text(file_path) or ""
 
         # EXTRACTION
         update_job(job_id, {"status": "extracting"})
-        structured = extract_invoice_data(text)
+        structured = extract_invoice_data(text) or {}
 
         # EVALUATION
         update_job(job_id, {"status": "evaluating"})
-        evaluation = evaluate_tender(structured)
+        evaluation = evaluate_tender(structured) or {}
 
-        # 🔥 NORMALIZE EVALUATION
-        status = evaluation.get("status", "review").upper()
+        # NORMALIZE
+        status = str(evaluation.get("status", "review")).upper()
 
-        # 🔥 EXPLANATION
-        explanation = generate_explanation(structured, evaluation)
+        # EXPLANATION (safe)
+        try:
+            explanation = generate_explanation(structured, evaluation)
+        except Exception:
+            explanation = "Explanation unavailable."
 
         # FINAL RESULT
         update_job(job_id, {
@@ -44,7 +47,9 @@ def process_document(job_id, file_path):
         })
 
     except Exception as e:
+        # FAIL SAFE
         update_job(job_id, {
             "status": "failed",
             "error": str(e)
         })
+        raise 
