@@ -4,19 +4,24 @@ import json
 
 REDIS_URL = os.getenv("REDIS_URL")
 
-if not REDIS_URL:
-    raise ValueError("REDIS_URL not set")
-
-r = redis.from_url(REDIS_URL, decode_responses=True)
+# 🔥 Safe fallback handling
+if REDIS_URL:
+    r = redis.from_url(REDIS_URL, decode_responses=True)
+else:
+    print("⚠️ REDIS_URL not set — using dummy mode")
+    r = None
 
 
 def set_job(job_id, data):
-    r.set(f"job:{job_id}", json.dumps(data), ex=3600)
+    if r:
+        r.set(f"job:{job_id}", json.dumps(data), ex=3600)
 
 
 def get_job(job_id):
-    data = r.get(f"job:{job_id}")
-    return json.loads(data) if data else None
+    if r:
+        data = r.get(f"job:{job_id}")
+        return json.loads(data) if data else None
+    return None
 
 
 def update_job(job_id, update_data):

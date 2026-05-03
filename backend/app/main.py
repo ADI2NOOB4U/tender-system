@@ -1,14 +1,12 @@
-import os
 from dotenv import load_dotenv
-if os.getenv("ENV") != "production":
-    load_dotenv()
+import os
 
-print("REDIS_URL:", os.getenv("REDIS_URL"))
+# 🔥 Load .env ONLY if exists (safe for both local + Render)
+load_dotenv()
 
 from fastapi import FastAPI
 from app.routes import upload, job, config, auth
 
-# 🔥 CREATE APP AFTER ENV LOAD
 app = FastAPI()
 
 # 🔥 ROUTES
