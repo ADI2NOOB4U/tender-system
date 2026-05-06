@@ -1,87 +1,118 @@
-# app/services/llm.py
-
-import requests
 import os
-import hashlib
 import json
-from app.db.redis_client import r  # shared Redis
+import re
+import google.generativeai as genai
+
+# =========================================================
+# CONFIGURE GEMINI
+# =========================================================
+
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+
+if GEMINI_API_KEY:
+    genai.configure(api_key=GEMINI_API_KEY)
+
+model = genai.GenerativeModel("gemini-1.5-flash-latest")
 
 
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+# =========================================================
+# CLEAN JSON
+# =========================================================
+
+def clean_json_response(text: str):
+
+    text = text.strip()
+
+    text = re.sub(
+        r"^```json",
+        "",
+        text,
+        flags=re.IGNORECASE
+    )
+
+    text = re.sub(
+        r"^```",
+        "",
+        text
+    )
+
+    text = re.sub(
+        r"```$",
+        "",
+        text
+    )
+
+    return text.strip()
 
 
-def _cache_key(prompt: str) -> str:
-    return "llm:" + hashlib.md5(prompt.encode()).hexdigest()
+# =========================================================
+# EXTRACTION
+# =========================================================
 
+def extract_invoice_data(text: str):
 
-def call_llm(prompt: str) -> str:
-    if not OPENAI_API_KEY:
-        raise ValueError("OPENAI_API_KEY not set")
+    if not text or len(text.strip()) < 20:
 
-    key = _cache_key(prompt)
+        return {
+            "company": None,
+            "amount": None,
+            "email": None,
+            "invoice_no": None,
+            "summary": "Insufficient OCR text"
+        }
 
-    # ✅ SAFE CACHE READ
-    cached = r.get(key) if r else None
-    if cached:
-        return cached
-
-    try:
-        response = requests.post(
-            "https://api.openai.com/v1/chat/completions",
-            headers={
-                "Authorization": f"Bearer {OPENAI_API_KEY}",
-                "Content-Type": "application/json"
-            },
-            json={
-                "model": "gpt-4o-mini",
-                "messages": [
-                    {"role": "user", "content": prompt}
-                ],
-                "temperature": 0.2,
-                "max_tokens": 120
-            },
-            timeout=15
-        )
-
-        response.raise_for_status()
-        data = response.json()
-
-        text = data["choices"][0]["message"]["content"].strip()
-
-        # ✅ SAFE CACHE WRITE
-        if r:
-            r.set(key, text, ex=3600)
-
-        return text
-
-    except Exception as e:
-        return f"LLM_ERROR: {str(e)}"
-
-
-# =========================
-# EXTRACTION FUNCTION
-# =========================
-
-def extract_invoice_data(text: str) -> dict:
     prompt = f"""
-Extract structured data from this document:
+Extract structured data from this tender/invoice document.
 
-{text}
+RETURN STRICT JSON ONLY.
 
-Return STRICT JSON with:
-- invoice_no
-- email
-- total
+FORMAT:
+
+{{
+  "company": string | null,
+  "amount": number | null,
+  "email": string | null,
+  "invoice_no": string | null,
+  "summary": string
+}}
+
+DOCUMENT:
+{text[:4000]}
 """
 
     try:
-        response = call_llm(prompt)
 
-        # ✅ Try parsing JSON
-        try:
-            return json.loads(response)
-        except Exception:
-            return {"raw": response}
+        response = model.generate_content(prompt)
 
-    except Exception:
-        return {}
+        raw = response.text.strip()
+
+        cleaned = clean_json_response(raw)
+
+        data = json.loads(cleaned)
+
+        return {
+            "company":
+                data.get("company"),
+
+            "amount":
+                data.get("amount"),
+
+            "email":
+                data.get("email"),
+
+            "invoice_no":
+                data.get("invoice_no"),
+
+            "summary":
+                data.get("summary"),
+        }
+
+    except Exception as e:
+
+        return {
+            "company": None,
+            "amount": None,
+            "email": None,
+            "invoice_no": None,
+            "summary": f"Gemini extraction failed: {str(e)}"
+        }

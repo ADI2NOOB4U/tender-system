@@ -1,158 +1,320 @@
 'use client'
 
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import ResultsUI from '@/components/ResultsUI'
 
-interface UploadBoxProps {
-  onUpload: (file: File) => void
-  isUploading: boolean
-  error?: string
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+interface Breakdown {
+  technical?: number
+  financial?: number
+  compliance?: number
 }
 
-export function UploadBox({ onUpload, isUploading, error }: UploadBoxProps) {
-  const [dragActive, setDragActive] = useState(false)
-  const [selectedFile, setSelectedFile] = useState<File | null>(null)
-  const inputRef = useRef<HTMLInputElement>(null)
+interface ParsedResult {
+  jobId: string
+  company: string
+  amount: number | null
+  score: number
+  status: string
+  explanation: string
+  breakdown: Breakdown
+  confidence: number
+}
 
-  const handleDrag = useCallback((e: React.DragEvent) => {
-    e.preventDefault()
-    e.stopPropagation()
-    if (e.type === 'dragenter' || e.type === 'dragover') setDragActive(true)
-    else setDragActive(false)
+interface JobResponse {
+  job_id: string
+  status: string
+  result?: {
+    structured?: {
+      company?: string
+      vendor?: string
+      name?: string
+      amount?: number
+      total?: number
+    }
+    evaluation?: {
+      score?: number
+      status?: string
+      evaluation?: string
+      confidence?: number
+      explanation?: string
+      breakdown?: Breakdown
+    }
+    explanation?: string
+  }
+  data?: JobResponse['result']
+}
+
+interface UploadBoxProps {
+  apiUrl?: string
+}
+
+// ─── Constants ────────────────────────────────────────────────────────────────
+
+const TERMINAL_STATUSES = new Set(['done', 'completed', 'failed', 'error'])
+const POLL_INTERVAL_MS = 2000
+const MAX_POLL_ATTEMPTS = 30
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function parseJob(job: JobResponse): ParsedResult {
+  const payload = job.result ?? job.data ?? {}
+  const structured = payload.structured ?? {}
+  const evaluation = payload.evaluation ?? {}
+  return {
+    jobId: job.job_id,
+    company: structured.company ?? structured.vendor ?? structured.name ?? 'Unknown Company',
+    amount: structured.amount ?? structured.total ?? null,
+    score: Number(evaluation.score) || 0,
+    status: evaluation.status ?? evaluation.evaluation ?? 'REVIEW',
+    explanation: evaluation.explanation ?? payload.explanation ?? 'No explanation available',
+    breakdown: evaluation.breakdown ?? { technical: 0, financial: 0, compliance: 0 },
+    confidence: Number(evaluation.confidence) || 0,
+  }
+}
+
+// ─── Component ────────────────────────────────────────────────────────────────
+
+export default function UploadBox({ apiUrl }: UploadBoxProps) {
+  const API_URL = apiUrl ?? process.env.NEXT_PUBLIC_API_URL ?? 'http://127.0.0.1:8000/api'
+
+  const [files, setFiles] = useState<File[]>([])
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [dragOver, setDragOver] = useState(false)
+  const [resultMap, setResultMap] = useState<Map<string, ParsedResult>>(new Map())
+  const [minScore, setMinScore] = useState(0)
+
+  // Tracks active intervals keyed by jobId
+  const pollIntervals = useRef<Map<string, ReturnType<typeof setInterval>>>(new Map())
+  // Tracks how many jobs are still actively polling
+  const activeJobCount = useRef(0)
+
+  // ── Unmount cleanup ────────────────────────────────────────────────────────
+
+  useEffect(() => {
+    return () => {
+      pollIntervals.current.forEach(clearInterval)
+      pollIntervals.current.clear()
+    }
   }, [])
 
-  const handleDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault()
-    e.stopPropagation()
-    setDragActive(false)
-    const file = e.dataTransfer.files?.[0]
-    if (file) setSelectedFile(file)
+  // ── Polling ────────────────────────────────────────────────────────────────
+
+  const startPolling = useCallback(
+    (jobId: string) => {
+      // Guard: never start a duplicate interval for the same job
+      if (pollIntervals.current.has(jobId)) return
+
+      let attempts = 0
+      activeJobCount.current += 1
+
+      const stopJob = () => {
+        const id = pollIntervals.current.get(jobId)
+        if (id !== undefined) {
+          clearInterval(id)
+          pollIntervals.current.delete(jobId)
+        }
+        activeJobCount.current = Math.max(0, activeJobCount.current - 1)
+        if (activeJobCount.current === 0) {
+          setLoading(false)
+        }
+      }
+
+      const intervalId = setInterval(async () => {
+        let statusLower = ''
+        attempts += 1
+
+        try {
+          const res = await fetch(`${API_URL}/job/${jobId}`, { cache: 'no-store' })
+          if (!res.ok) throw new Error(`HTTP ${res.status}`)
+
+          const job: JobResponse = await res.json()
+          statusLower = String(job.status ?? '').toLowerCase()
+
+          if (job.result || job.data) {
+            const parsed = parseJob(job)
+
+            setResultMap((prev) => {
+              const updated = new Map(prev)
+              updated.set(jobId, parsed)
+              return updated
+            })
+
+            // STOP immediately after result arrives
+            stopJob()
+            return
+          }
+
+          if (TERMINAL_STATUSES.has(statusLower)) {
+            stopJob()
+          }
+        } catch (err) {
+          console.error(
+            `Error polling job ${jobId}:`,
+            err
+          )
+          stopJob()
+        }
+      }, POLL_INTERVAL_MS)
+
+      pollIntervals.current.set(jobId, intervalId)
+    },
+    [API_URL],
+  )
+
+  // ── Upload ─────────────────────────────────────────────────────────────────
+
+  const handleUpload = useCallback(async () => {
+    if (files.length === 0 || loading) return
+
+    // Cancel all running polls before a new upload
+    pollIntervals.current.forEach(clearInterval)
+    pollIntervals.current.clear()
+    activeJobCount.current = 0
+
+    setLoading(true)
+    setError(null)
+
+    try {
+      const formData = new FormData()
+      files.forEach((file) => formData.append('files', file))
+
+      const res = await fetch(`${API_URL}/upload-batch`, {
+        method: 'POST',
+        body: formData,
+      })
+
+      if (!res.ok) {
+        const text = await res.text()
+        throw new Error(text || `Upload failed (${res.status})`)
+      }
+
+      const data = await res.json()
+      const jobIds: string[] = data.jobs ?? []
+
+      if (jobIds.length === 0) throw new Error('No job IDs returned from server')
+
+      jobIds.forEach((id) => startPolling(id))
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Upload failed. Check console.'
+      setError(msg)
+      setLoading(false)
+      console.error(err)
+    }
+  }, [files, loading, API_URL, startPolling])
+
+  // ── File handling ──────────────────────────────────────────────────────────
+
+  const handleFileChange = useCallback((list: FileList | null) => {
+    if (!list) return
+    setFiles(Array.from(list))
+    setError(null)
   }, [])
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (file) setSelectedFile(file)
-  }
+  const handleDrop = useCallback(
+    (e: React.DragEvent<HTMLDivElement>) => {
+      e.preventDefault()
+      setDragOver(false)
+      handleFileChange(e.dataTransfer.files)
+    },
+    [handleFileChange],
+  )
 
-  const handleSubmit = () => {
-    if (selectedFile) onUpload(selectedFile)
-  }
+  // ── Derived ────────────────────────────────────────────────────────────────
+
+  const parsedResults = useMemo(
+    () => Array.from(resultMap.values()).sort((a, b) => b.score - a.score),
+    [resultMap],
+  )
+
+  const filteredResults = useMemo(
+    () => parsedResults.filter((r) => r.score >= minScore),
+    [parsedResults, minScore],
+  )
+
+  const winner: ParsedResult | null = filteredResults[0] ?? null
+
+  // ── Render ─────────────────────────────────────────────────────────────────
 
   return (
-    <div className="space-y-4">
-      {/* Drag & Drop Zone */}
-      <div
-        onDragEnter={handleDrag}
-        onDragOver={handleDrag}
-        onDragLeave={handleDrag}
-        onDrop={handleDrop}
-        onClick={() => inputRef.current?.click()}
-        className={`
-          relative border-2 border-dashed cursor-pointer transition-colors duration-150
-          ${dragActive
-            ? 'border-gov-blue bg-blue-50'
-            : 'border-gray-300 bg-gray-50 hover:border-gov-blue hover:bg-gray-100'
-          }
-          ${isUploading ? 'pointer-events-none opacity-60' : ''}
-        `}
-      >
-        <input
-          ref={inputRef}
-          type="file"
-          className="hidden"
-          accept=".pdf,.doc,.docx,.png,.jpg,.jpeg,.tiff"
-          onChange={handleChange}
-          disabled={isUploading}
-        />
-
-        <div className="flex flex-col items-center justify-center py-12 px-6 text-center">
-          {/* Upload Icon */}
-          <svg
-            className="w-10 h-10 text-gray-400 mb-4"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-            strokeWidth={1.5}
-          >
-            <path strokeLinecap="round" strokeLinejoin="round"
-              d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
-          </svg>
-
-          {selectedFile ? (
-            <>
-              <p className="text-gov-navy font-semibold text-sm">{selectedFile.name}</p>
-              <p className="text-gray-500 text-xs mt-1">
-                {(selectedFile.size / 1024).toFixed(1)} KB &nbsp;·&nbsp; Click to change file
-              </p>
-            </>
-          ) : (
-            <>
-              <p className="text-gray-600 text-sm font-semibold">
-                Drag &amp; drop tender document here
-              </p>
-              <p className="text-gray-400 text-xs mt-1">or click to browse files</p>
-              <p className="text-gray-400 text-xs mt-3">
-                Accepted formats: PDF, DOC, DOCX, PNG, JPG, TIFF
-              </p>
-            </>
-          )}
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+      <div className="upload-card">
+        <div className="upload-card-header">
+          <div className="card-icon">📂</div>
+          <div>
+            <div className="card-label">Document Upload</div>
+            <div className="card-sublabel">PDF, PNG, JPG — multiple files supported</div>
+          </div>
         </div>
-      </div>
 
-      {/* File Info Row */}
-      {selectedFile && (
-        <div className="bg-blue-50 border border-blue-200 px-4 py-2.5 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <svg className="w-4 h-4 text-gov-blue flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-              <path d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z"/>
-            </svg>
-            <span className="text-xs text-gov-navy font-semibold">{selectedFile.name}</span>
-            <span className="text-xs text-gray-500">
-              ({(selectedFile.size / 1024).toFixed(1)} KB)
+        <div
+          className={`dropzone${dragOver ? ' over' : ''}`}
+          onDragOver={(e) => { e.preventDefault(); setDragOver(true) }}
+          onDragLeave={() => setDragOver(false)}
+          onDrop={handleDrop}
+        >
+          <input
+            type="file"
+            multiple
+            accept=".pdf,.png,.jpg,.jpeg"
+            onChange={(e) => handleFileChange(e.target.files)}
+          />
+          <span className="dropzone-icon">📄</span>
+          <div className="dropzone-text">Drag & drop files here, or click to browse</div>
+          <div className="dropzone-hint">
+            Upload multiple bidder documents for comparative evaluation
+          </div>
+        </div>
+
+        {files.length > 0 && (
+          <div className="file-selected">
+            <span>✅</span>
+            <span>
+              {files.length} file{files.length > 1 ? 's' : ''} selected:{' '}
+              {files.map((f) => f.name).join(', ')}
             </span>
           </div>
-          <button
-            onClick={(e) => { e.stopPropagation(); setSelectedFile(null) }}
-            className="text-gray-400 hover:text-red-600 text-xs underline"
-            disabled={isUploading}
+        )}
+
+        {error && (
+          <div
+            style={{
+              padding: '0.75rem 1rem',
+              background: '#fff0f0',
+              border: '1px solid #ffcccc',
+              borderRadius: '0.5rem',
+              color: '#cc0000',
+              fontSize: '0.875rem',
+            }}
           >
-            Remove
-          </button>
-        </div>
-      )}
+            ⚠️ {error}
+          </div>
+        )}
 
-      {/* Error */}
-      {error && (
-        <div className="bg-red-50 border border-red-300 px-4 py-2.5 text-xs text-red-800 flex items-start gap-2">
-          <span className="font-bold mt-0.5">✕</span>
-          <span>{error}</span>
-        </div>
-      )}
-
-      {/* Submit Button */}
-      <div className="flex items-center gap-4">
         <button
-          onClick={handleSubmit}
-          disabled={!selectedFile || isUploading}
-          className="gov-btn-primary flex items-center gap-2"
+          className="submit-btn"
+          onClick={handleUpload}
+          disabled={loading || files.length === 0}
         >
-          {isUploading ? (
-            <>
-              <span className="inline-block w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
-              Submitting...
-            </>
+          {loading ? (
+            <><span className="spinner" /> Evaluating…</>
           ) : (
-            <>
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
-              </svg>
-              Submit Tender Document
-            </>
+            <>🔍 Submit for Evaluation</>
           )}
         </button>
-        <span className="text-xs text-gray-400">
-          Maximum file size: 25 MB
-        </span>
       </div>
+
+      {parsedResults.length > 0 && (
+        <ResultsUI
+          parsedResults={parsedResults}
+          filteredResults={filteredResults}
+          winner={winner}
+          minScore={minScore}
+          setMinScore={setMinScore}
+        />
+      )}
     </div>
   )
 }

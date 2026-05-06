@@ -1,118 +1,475 @@
-"use client";
-import jsPDF from "jspdf";
-import html2canvas from "html2canvas";
-import { useEffect, useState } from "react";
-import ResultsUI from "../../components/ResultsUI";
+'use client'
+
+import { useEffect, useMemo, useState } from 'react'
+import jsPDF from 'jspdf'
+import html2canvas from 'html2canvas'
+
+import ResultsUI from '@/components/ResultsUI'
+
+// ========================================================
+// TYPES
+// ========================================================
+
+interface ParsedResult {
+  company: string
+  amount: number | null
+  score: number
+  status: string
+  explanation: string
+}
+
+interface StoredJob {
+  status?: string
+
+  result?: {
+    structured?: {
+      company?: string
+      amount?: number
+    }
+
+    evaluation?: {
+      score?: number
+      status?: string
+      explanation?: string
+    }
+  }
+}
+
+interface BatchData {
+  batch_id?: string
+  created_at?: string
+  data?: StoredJob[]
+}
+
+// ========================================================
+// PAGE
+// ========================================================
 
 export default function ReportsPage() {
-    const exportPDF = async () => {
-        const element = document.getElementById("report-section");
+  const [batches, setBatches] =
+    useState<BatchData[]>([])
 
-        if (!element) {
-            alert("Nothing to export");
-            return;
-        }
+  const [selectedBatch, setSelectedBatch] =
+    useState<number | null>(null)
 
-        const canvas = await html2canvas(element);
-        const imgData = canvas.toDataURL("image/png");
+  const [minScore, setMinScore] =
+    useState<number>(0)
 
-        const pdf = new jsPDF("p", "mm", "a4");
+  const [loading, setLoading] =
+    useState(true)
 
-        const pageWidth = pdf.internal.pageSize.getWidth();
-        const imgWidth = pageWidth - 20;
-        const imgHeight = (canvas.height * imgWidth) / canvas.width;
+  const [exporting, setExporting] =
+    useState(false)
 
-        pdf.addImage(imgData, "PNG", 10, 10, imgWidth, imgHeight);
-        pdf.save("tender-report.pdf");
-        };
-    const [batches, setBatches] = useState<any[]>([]);
-  const [selectedBatch, setSelectedBatch] = useState<number | null>(null);
-  const [minScore, setMinScore] = useState(0);
+  // ======================================================
+  // LOAD HISTORY
+  // ======================================================
 
-  // 🔥 LOAD HISTORY
   useEffect(() => {
-    const stored = localStorage.getItem("tenderHistory");
+    try {
+      const stored =
+        localStorage.getItem(
+          'tenderHistory'
+        )
 
-    if (stored) {
-      const parsed = JSON.parse(stored);
-      setBatches(parsed);
+      if (!stored) {
+        setLoading(false)
+        return
+      }
+
+      const parsed =
+        JSON.parse(stored)
+
+      if (Array.isArray(parsed)) {
+        setBatches(parsed)
+      } else {
+        console.warn(
+          'Invalid tender history format'
+        )
+      }
+
+    } catch (error) {
+      console.error(
+        'Failed to load tender history',
+        error
+      )
+    } finally {
+      setLoading(false)
     }
-  }, []);
+  }, [])
 
-  // 🔥 SELECT DATA
-  const selectedData =
-    selectedBatch !== null
-      ? batches[selectedBatch]?.data ?? []
-      : batches.flatMap((b) => b.data ?? []);
+  // ======================================================
+  // SELECT DATA
+  // ======================================================
 
-  // 🔥 PARSE DATA (same as page.tsx)
-  const parsedResults = selectedData
-    .filter((r) => r?.result)
-    .map((r) => ({
-      company: r.result.extracted_data?.company ?? "Unknown",
-      amount: r.result.extracted_data?.amount ?? null,
-      score: r.result.evaluation?.score ?? 0,
-      status: r.result.evaluation?.status ?? "",
-      explanation: r.result.explanation ?? "",
-    }))
-    .sort((a, b) => b.score - a.score);
+  const selectedData = useMemo(() => {
+    if (
+      selectedBatch !== null &&
+      batches[selectedBatch]
+    ) {
+      return (
+        batches[selectedBatch].data ??
+        []
+      )
+    }
 
-  const filteredResults = parsedResults.filter((r) => r.score >= minScore);
-  const winner = parsedResults[0] ?? null;
+    return batches.flatMap(
+      (batch) => batch.data ?? []
+    )
+  }, [batches, selectedBatch])
+
+  // ======================================================
+  // PARSE RESULTS
+  // ======================================================
+
+  const parsedResults: ParsedResult[] =
+    useMemo(() => {
+      return selectedData
+
+        .filter(
+          (item) =>
+            item?.result &&
+            item?.status !== 'failed' &&
+            item?.status !== 'error'
+        )
+
+        .map((item) => ({
+          company:
+            item.result?.structured
+              ?.company ??
+            'Unknown Company',
+
+          amount:
+            item.result?.structured
+              ?.amount ?? null,
+
+          score:
+            Number(
+              item.result?.evaluation
+                ?.score ?? 0
+            ),
+
+          status:
+            item.result?.evaluation
+              ?.status ??
+            'REVIEW',
+
+          explanation:
+            item.result?.evaluation
+              ?.explanation ??
+            'No explanation available',
+        }))
+
+        .filter(
+          (item) =>
+            !Number.isNaN(item.score)
+        )
+
+        .sort(
+          (a, b) =>
+            b.score - a.score
+        )
+
+    }, [selectedData])
+
+  // ======================================================
+  // FILTERED
+  // ======================================================
+
+  const filteredResults =
+    useMemo(() => {
+      return parsedResults.filter(
+        (result) =>
+          result.score >= minScore
+      )
+    }, [parsedResults, minScore])
+
+  // ======================================================
+  // WINNER
+  // ======================================================
+
+  const winner =
+    filteredResults.length > 0
+      ? filteredResults[0]
+      : null
+
+  // ======================================================
+  // EXPORT PDF
+  // ======================================================
+
+  const exportPDF = async () => {
+    try {
+      setExporting(true)
+
+      const element =
+        document.getElementById(
+          'report-section'
+        )
+
+      if (!element) {
+        alert(
+          'No report available.'
+        )
+
+        return
+      }
+
+      const canvas =
+        await html2canvas(element, {
+          scale: 1.5,
+          useCORS: true,
+          logging: false,
+        })
+
+      const imgData =
+        canvas.toDataURL('image/png')
+
+      const pdf = new jsPDF(
+        'p',
+        'mm',
+        'a4'
+      )
+
+      const pageWidth =
+        pdf.internal.pageSize.getWidth()
+
+      const pageHeight =
+        pdf.internal.pageSize.getHeight()
+
+      const margin = 10
+
+      const imgWidth =
+        pageWidth - margin * 2
+
+      const imgHeight =
+        (canvas.height * imgWidth) /
+        canvas.width
+
+      let heightLeft =
+        imgHeight
+
+      let position = margin
+
+      pdf.addImage(
+        imgData,
+        'PNG',
+        margin,
+        position,
+        imgWidth,
+        imgHeight
+      )
+
+      heightLeft -= pageHeight
+
+      while (heightLeft > 0) {
+        position =
+          heightLeft - imgHeight
+
+        pdf.addPage()
+
+        pdf.addImage(
+          imgData,
+          'PNG',
+          margin,
+          position,
+          imgWidth,
+          imgHeight
+        )
+
+        heightLeft -= pageHeight
+      }
+
+      pdf.save(
+        `TenderLens-Report-${Date.now()}.pdf`
+      )
+
+    } catch (error) {
+      console.error(
+        'PDF export failed',
+        error
+      )
+
+      alert(
+        'Failed to export PDF.'
+      )
+
+    } finally {
+      setExporting(false)
+    }
+  }
+
+  // ======================================================
+  // UI
+  // ======================================================
 
   return (
-    <div style={{ padding: "30px" }}>
-      <h1 style={{ fontSize: "24px", fontWeight: "bold" }}>
-        📊 Tender Reports
-      </h1>
-            <h1 style={{ fontSize: "24px", fontWeight: "bold" }}>
-        📊 Tender Reports
-        </h1>
+    <div className="p-6 space-y-6">
 
-        <div style={{ marginTop: "15px", marginBottom: "15px" }}>
-        <button onClick={exportPDF}>
-            📄 Export PDF
-        </button>
+      {/* HEADER */}
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 border-b border-gray-200 pb-4">
+
+        <div>
+          <h1 className="text-2xl font-bold text-gov-navy">
+            Tender Evaluation Reports
+          </h1>
+
+          <p className="text-sm text-gray-500 mt-1">
+            AI-generated tender analysis
+            and ranking reports
+          </p>
         </div>
 
-      {/* 🔥 BATCH SELECTOR */}
-      <div style={{ marginTop: "20px", marginBottom: "20px" }}>
-        <label style={{ marginRight: "10px" }}>📦 Select Batch:</label>
+        <button
+          onClick={exportPDF}
 
-        <select
-          onChange={(e) => {
-            const val = e.target.value;
-            setSelectedBatch(val === "" ? null : Number(val));
-          }}
+          disabled={
+            exporting ||
+            filteredResults.length === 0
+          }
+
+          className="
+            px-4 py-2
+            bg-gov-blue
+            text-white
+            rounded-md
+            text-sm
+            font-medium
+            hover:opacity-90
+            disabled:opacity-50
+          "
         >
-          <option value="">All Batches</option>
-
-          {batches.map((_, index) => (
-            <option key={index} value={index}>
-              Batch {index + 1}
-            </option>
-          ))}
-        </select>
+          {exporting
+            ? 'Exporting...'
+            : '📄 Export PDF'}
+        </button>
       </div>
 
-      {/* 🔥 RESULTS UI */}
-      {parsedResults.length > 0 && (
-        <div id="report-section">
-        <ResultsUI
-            parsedResults={parsedResults}
-            filteredResults={filteredResults}
-            winner={winner}
-            minScore={minScore}
-            setMinScore={setMinScore}
-        />
+      {/* FILTERS */}
+      <div className="gov-card p-5 flex flex-col md:flex-row gap-6">
+
+        {/* Batch */}
+        <div className="space-y-2">
+
+          <label className="gov-label">
+            Select Batch
+          </label>
+
+          <select
+            value={
+              selectedBatch ?? ''
+            }
+
+            onChange={(e) => {
+              const value =
+                e.target.value
+
+              setSelectedBatch(
+                value === ''
+                  ? null
+                  : Number(value)
+              )
+            }}
+
+            className="
+              border border-gray-300
+              px-3 py-2
+              rounded-md
+              text-sm
+            "
+          >
+            <option value="">
+              All Batches
+            </option>
+
+            {batches.map(
+              (batch, index) => (
+                <option
+                  key={
+                    batch.batch_id ??
+                    index
+                  }
+
+                  value={index}
+                >
+                  Batch {index + 1}
+                </option>
+              )
+            )}
+          </select>
+        </div>
+
+        {/* Score */}
+        <div className="space-y-2">
+
+          <label className="gov-label">
+            Minimum Score
+          </label>
+
+          <input
+            type="range"
+
+            min={0}
+
+            max={100}
+
+            value={minScore}
+
+            onChange={(e) =>
+              setMinScore(
+                Number(
+                  e.target.value
+                )
+              )
+            }
+
+            className="w-64"
+          />
+
+          <div className="text-sm text-gray-500">
+            Showing tenders with
+            score ≥{' '}
+            <strong>
+              {minScore}
+            </strong>
+          </div>
+        </div>
+      </div>
+
+      {/* LOADING */}
+      {loading && (
+        <div className="gov-card p-8 text-center text-gray-400 text-sm">
+          Loading report history...
         </div>
       )}
 
-      {parsedResults.length === 0 && (
-        <div style={{ marginTop: "30px", fontStyle: "italic" }}>
-          No data available for the selected batch.
-        </div>
-      )}
+      {/* RESULTS */}
+      {!loading &&
+        filteredResults.length >
+          0 && (
+          <div id="report-section">
+            <ResultsUI
+              parsedResults={
+                parsedResults
+              }
+
+              filteredResults={
+                filteredResults
+              }
+
+              winner={winner}
+            />
+          </div>
+        )}
+
+      {/* EMPTY */}
+      {!loading &&
+        filteredResults.length ===
+          0 && (
+          <div className="gov-card p-8 text-center text-gray-500 italic">
+            No tender reports
+            available.
+          </div>
+        )}
     </div>
-  );
+  )
 }

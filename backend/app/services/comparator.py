@@ -1,63 +1,312 @@
+import logging
+
 from app.services.config import get_config
 
+logger = logging.getLogger(__name__)
 
-def calculate_scores(job):
+
+# =========================================================
+# HELPERS
+# =========================================================
+
+def safe_float(value):
+    """
+    Safe float conversion.
+    """
+
+    if value is None:
+        return None
+
+    try:
+        if isinstance(value, (int, float)):
+            return float(value)
+
+        value = (
+            str(value)
+            .replace(",", "")
+            .strip()
+        )
+
+        return float(value)
+
+    except Exception:
+        return None
+
+
+def clamp(value, minimum=0, maximum=100):
+    return max(minimum, min(maximum, value))
+
+
+# =========================================================
+# SCORE CALCULATION
+# =========================================================
+
+def calculate_scores(job: dict):
+    """
+    Calculate weighted tender scores.
+    """
+
     config = get_config()
 
-    weights = config["weights"]
-    fin_rules = config["financial_rules"]
-    tech_rules = config["technical_rules"]
+    weights = config.get("weights", {})
+
+    financial_rules = config.get(
+        "financial_rules",
+        {}
+    )
+
+    technical_rules = config.get(
+        "technical_rules",
+        {}
+    )
+
+    # =====================================================
+    # EXTRACT DATA
+    # =====================================================
 
     result = job.get("result", {})
-    data = result.get("structured_data", {})
-    evaluation = result.get("evaluation", "REVIEW")
-    confidence = result.get("confidence") or 0
 
-    # 🔥 FINANCIAL SCORE
-    try:
-        total = float(data.get("total", "0").replace(",", "."))
-        if total >= fin_rules["high"]:
+    structured = (
+        result.get("structured")
+        or result.get("structured_data")
+        or {}
+    )
+
+    evaluation_data = result.get(
+        "evaluation",
+        {}
+    )
+
+    evaluation_status = (
+        evaluation_data.get("status")
+        or evaluation_data.get("evaluation")
+        or "REVIEW"
+    )
+
+    confidence = (
+        evaluation_data.get("confidence")
+        or 0
+    )
+
+    ai_score = (
+        evaluation_data.get("score")
+        or 0
+    )
+
+    rules = evaluation_data.get(
+        "rules",
+        {}
+    )
+
+    score_adjustments = rules.get(
+        "score_adjustments",
+        {}
+    )
+
+    # =====================================================
+    # FINANCIAL SCORE
+    # =====================================================
+
+    financial_score = 0
+
+    amount = (
+        structured.get("amount")
+        or structured.get("total")
+    )
+
+    amount = safe_float(amount)
+
+    if amount is not None:
+
+        if amount >= financial_rules.get(
+            "high",
+            100
+        ):
             financial_score = 100
-        elif total >= fin_rules["medium"]:
+
+        elif amount >= financial_rules.get(
+            "medium",
+            50
+        ):
             financial_score = 70
+
         else:
-            financial_score = 30
-    except:
+            financial_score = 40
+
+    else:
         financial_score = 20
 
-    # 🔥 TECHNICAL SCORE
+    # rule adjustments
+    financial_score += (
+        score_adjustments.get(
+            "financial",
+            0
+        )
+    )
+
+    # =====================================================
+    # TECHNICAL SCORE
+    # =====================================================
+
     technical_score = 0
 
-    if data.get("invoice_no"):
-        technical_score += tech_rules["invoice"]
+    if structured.get("company"):
+        technical_score += technical_rules.get(
+            "company",
+            15
+        )
 
-    if data.get("email"):
-        technical_score += tech_rules["email"]
+    if structured.get("invoice_no"):
+        technical_score += technical_rules.get(
+            "invoice",
+            15
+        )
 
-    technical_score += int(confidence * tech_rules["confidence"])
+    if structured.get("email"):
+        technical_score += technical_rules.get(
+            "email",
+            10
+        )
 
-    financial_score = min(financial_score, 100)
-    technical_score = min(technical_score, 100)
+    # confidence contribution
+    technical_score += int(
+        confidence * technical_rules.get(
+            "confidence",
+            0.2
+        )
+    )
+
+    # AI contribution
+    technical_score += int(ai_score * 0.2)
+
+    # rule adjustments
+    technical_score += (
+        score_adjustments.get(
+            "technical",
+            0
+        )
+    )
+
+    # =====================================================
+    # COMPLIANCE SCORE
+    # =====================================================
+
+    compliance_score = 50
+
+    compliance_score += (
+        score_adjustments.get(
+            "compliance",
+            0
+        )
+    )
+
+    # =====================================================
+    # NORMALIZATION
+    # =====================================================
+
+    financial_score = clamp(financial_score)
+
+    technical_score = clamp(technical_score)
+
+    compliance_score = clamp(compliance_score)
+
+    # =====================================================
+    # FINAL WEIGHTED SCORE
+    # =====================================================
 
     final_score = (
-        financial_score * weights["financial"] +
-        technical_score * weights["technical"]
+        (
+            financial_score *
+            weights.get("financial", 0.4)
+        ) +
+
+        (
+            technical_score *
+            weights.get("technical", 0.4)
+        ) +
+
+        (
+            compliance_score *
+            weights.get("compliance", 0.2)
+        )
+    )
+
+    final_score = round(final_score, 2)
+
+    logger.info(
+        f"[COMPARATOR] "
+        f"Job={job.get('job_id')} "
+        f"Score={final_score}"
     )
 
     return {
         "job_id": job.get("job_id"),
-        "evaluation": evaluation,
+
+        "evaluation": evaluation_status,
+
         "financial_score": financial_score,
+
         "technical_score": technical_score,
-        "final_score": round(final_score, 2)
+
+        "compliance_score": compliance_score,
+
+        "confidence": confidence,
+
+        "ai_score": ai_score,
+
+        "final_score": final_score
     }
 
 
-def rank_tenders(jobs: list):
-    scored = [calculate_scores(job) for job in jobs]
-    ranked = sorted(scored, key=lambda x: x["final_score"], reverse=True)
+# =========================================================
+# RANKING ENGINE
+# =========================================================
 
-    for i, item in enumerate(ranked):
-        item["rank"] = i + 1
+def rank_tenders(jobs: list):
+    """
+    Rank tender submissions.
+    """
+
+    if not jobs:
+        return []
+
+    scored_jobs = []
+
+    for job in jobs:
+
+        try:
+            scored = calculate_scores(job)
+
+            scored_jobs.append(scored)
+
+        except Exception as e:
+            logger.error(
+                f"[COMPARATOR] "
+                f"Failed scoring job: {str(e)}"
+            )
+
+    ranked = sorted(
+        scored_jobs,
+
+        key=lambda x: (
+            x["final_score"],
+            x["technical_score"],
+            x["financial_score"]
+        ),
+
+        reverse=True
+    )
+
+    # =====================================================
+    # ASSIGN RANKS
+    # =====================================================
+
+    for index, item in enumerate(ranked):
+        item["rank"] = index + 1
+
+    logger.info(
+        f"[COMPARATOR] Ranked "
+        f"{len(ranked)} tenders"
+    )
 
     return ranked
