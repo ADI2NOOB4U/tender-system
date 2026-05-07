@@ -1,66 +1,83 @@
 'use client'
 
+import React from 'react'
+
 type Status = 'pending' | 'processing' | 'done' | 'failed'
 
 interface StatusCardProps {
-  status: Status
-  jobId: string
+  status:    Status
+  jobId:     string
   pollCount: number
 }
 
 const STATUS_CONFIG: Record<Status, {
-  label: string
+  label:       string
   description: string
-  color: string
-  bgColor: string
-  borderColor: string
-  icon: React.ReactNode
+  color:       string
+  bg:          string
+  border:      string
+  accentBar:   string
+  icon:        React.ReactNode
 }> = {
   pending: {
-    label: 'PENDING',
-    description: 'Document is queued for processing. Please wait.',
-    color: 'text-yellow-800',
-    bgColor: 'bg-yellow-50',
-    borderColor: 'border-yellow-300',
+    label:       'QUEUED',
+    description: 'Document is queued for processing. Your submission is confirmed and awaiting the evaluation pipeline.',
+    color:       '#78350f',
+    bg:          'linear-gradient(135deg, #fffbeb 0%, #fef9e8 100%)',
+    border:      '#fde68a',
+    accentBar:   '#f59e0b',
     icon: (
-      <svg className="w-5 h-5 text-yellow-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
+        stroke="#d97706" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="12" cy="12" r="10"/>
+        <polyline points="12 6 12 12 16 14"/>
       </svg>
     ),
   },
   processing: {
-    label: 'PROCESSING',
-    description: 'Document is being analysed. OCR and data extraction in progress.',
-    color: 'text-blue-800',
-    bgColor: 'bg-blue-50',
-    borderColor: 'border-blue-300',
+    label:       'PROCESSING',
+    description: 'OCR extraction and AI evaluation in progress. This typically takes 30–90 seconds per document.',
+    color:       '#1e3a8a',
+    bg:          'linear-gradient(135deg, #eff6ff 0%, #e8f0ff 100%)',
+    border:      '#93c5fd',
+    accentBar:   '#2563eb',
     icon: (
-      <svg className="w-5 h-5 text-blue-600 animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
+        stroke="#2563eb" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+        style={{ animation: 'spin 0.9s linear infinite' }}>
+        <polyline points="23 4 23 10 17 10"/>
+        <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
       </svg>
     ),
   },
   done: {
-    label: 'COMPLETED',
-    description: 'Evaluation complete. Results are available below.',
-    color: 'text-green-800',
-    bgColor: 'bg-green-50',
-    borderColor: 'border-green-300',
+    label:       'COMPLETED',
+    description: 'Evaluation complete. AI scoring and ranking results are available below.',
+    color:       '#14532d',
+    bg:          'linear-gradient(135deg, #f0fdf4 0%, #ecfdf7 100%)',
+    border:      '#86efac',
+    accentBar:   '#16a34a',
     icon: (
-      <svg className="w-5 h-5 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
+        stroke="#16a34a" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+        <polyline points="22 4 12 14.01 9 11.01"/>
       </svg>
     ),
   },
   failed: {
-    label: 'FAILED',
-    description: 'Processing encountered an error. Please re-submit the document.',
-    color: 'text-red-800',
-    bgColor: 'bg-red-50',
-    borderColor: 'border-red-300',
+    label:       'FAILED',
+    description: 'Processing encountered an error. Please re-submit the document or contact helpdesk.',
+    color:       '#7f1d1d',
+    bg:          'linear-gradient(135deg, #fff1f2 0%, #fff0f0 100%)',
+    border:      '#fca5a5',
+    accentBar:   '#dc2626',
     icon: (
-      <svg className="w-5 h-5 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
+        stroke="#dc2626" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="12" cy="12" r="10"/>
+        <line x1="15" y1="9" x2="9" y2="15"/>
+        <line x1="9" y1="9" x2="15" y2="15"/>
       </svg>
     ),
   },
@@ -68,23 +85,96 @@ const STATUS_CONFIG: Record<Status, {
 
 export function StatusCard({ status, jobId, pollCount }: StatusCardProps) {
   const cfg = STATUS_CONFIG[status]
+  const isActive = status === 'pending' || status === 'processing'
 
   return (
-    <div className={`border ${cfg.borderColor} ${cfg.bgColor} p-5`}>
-      <div className="flex items-start gap-4">
-        <div className="flex-shrink-0 mt-0.5">{cfg.icon}</div>
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-3 mb-1">
-            <span className={`text-sm font-bold tracking-widest ${cfg.color}`}>
-              {cfg.label}
+    <div
+      className="status-card animate-fadeInUp"
+      style={{
+        background:   cfg.bg,
+        borderColor:  cfg.border,
+        color:        cfg.color,
+        position:     'relative',
+        overflow:     'hidden',
+        boxShadow:    '0 2px 12px rgba(0,0,0,0.06)',
+      }}
+    >
+      {/* Accent bar */}
+      <div style={{
+        position:     'absolute',
+        left:         0, top: 0, bottom: 0,
+        width:        '4px',
+        background:   cfg.accentBar,
+        borderRadius: '4px 0 0 4px',
+      }} />
+
+      {/* Processing shimmer */}
+      {isActive && (
+        <div style={{
+          position:   'absolute',
+          inset:      0,
+          background: `linear-gradient(90deg,
+            transparent 0%,
+            rgba(255,255,255,0.25) 40%,
+            rgba(255,255,255,0.5) 50%,
+            rgba(255,255,255,0.25) 60%,
+            transparent 100%
+          )`,
+          backgroundSize: '200% 100%',
+          animation:      'shimmerSweep 2.2s ease-in-out infinite',
+          pointerEvents:  'none',
+        }} />
+      )}
+
+      <div style={{ flexShrink: 0, marginTop: '1px', paddingLeft: '6px' }}>{cfg.icon}</div>
+
+      <div style={{ flex: 1 }}>
+        <div style={{
+          display:     'flex', alignItems: 'center',
+          gap:         '12px', marginBottom: '4px', flexWrap: 'wrap',
+        }}>
+          <span style={{
+            fontSize: '11px', fontWeight: 700,
+            letterSpacing: '0.12em', textTransform: 'uppercase',
+            color: cfg.color,
+          }}>
+            {cfg.label}
+          </span>
+
+          {isActive && (
+            <span style={{
+              fontSize: '10px', color: 'var(--text-muted)',
+              fontFamily: "'IBM Plex Mono', monospace",
+            }}>
+              Auto-refreshing every 2s · Poll #{pollCount}
             </span>
-            {(status === 'pending' || status === 'processing') && (
-              <span className="text-xs text-gray-400">
-                (auto-refreshing every 2s — poll #{pollCount})
-              </span>
-            )}
-          </div>
-          <p className={`text-xs ${cfg.color} opacity-80`}>{cfg.description}</p>
+          )}
+
+          {status === 'done' && (
+            <span style={{
+              fontSize: '10px', fontWeight: 700,
+              color: '#16a34a',
+              background: '#dcfce7',
+              border: '1px solid #86efac',
+              borderRadius: '999px',
+              padding: '2px 8px',
+              letterSpacing: '0.08em',
+            }}>
+              ✓ READY
+            </span>
+          )}
+        </div>
+
+        <p style={{ fontSize: '12px', opacity: 0.85, lineHeight: 1.5 }}>
+          {cfg.description}
+        </p>
+
+        <div style={{
+          marginTop: '8px', fontSize: '10px',
+          fontFamily: "'IBM Plex Mono', monospace",
+          color: 'var(--text-muted)',
+        }}>
+          Job ID: <strong style={{ color: cfg.color }}>{jobId}</strong>
         </div>
       </div>
     </div>
