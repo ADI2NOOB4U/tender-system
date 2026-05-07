@@ -357,7 +357,7 @@ export default function JobPage() {
       {/* Status */}
       {job && (
         <StatusCard
-          status={normalizedStatus}
+          status={normalizedStatus as any}
           jobId={id}
           pollCount={pollCount}
         />
