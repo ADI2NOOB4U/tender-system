@@ -15,6 +15,7 @@ const EVALUATION_CONFIG = {
     icon: "✓",
     desc: "All eligibility criteria satisfied. Candidate qualifies for next stage.",
   },
+
   FAIL: {
     label: "NOT ELIGIBLE",
     color: "text-red-800",
@@ -23,6 +24,7 @@ const EVALUATION_CONFIG = {
     icon: "✕",
     desc: "Critical criteria not met. Submission rejected.",
   },
+
   REVIEW: {
     label: "REQUIRES REVIEW",
     color: "text-yellow-800",
@@ -33,38 +35,79 @@ const EVALUATION_CONFIG = {
   },
 };
 
-export function ResultView({ result }: ResultViewProps) {
-  type EvaluationKey = keyof typeof EVALUATION_CONFIG;
-  const evaluationKey = String(result.evaluation || "REVIEW")
-    .toUpperCase() as EvaluationKey;
+export function ResultView({
+  result,
+}: ResultViewProps) {
+
+  type EvaluationKey =
+    keyof typeof EVALUATION_CONFIG;
+
+  // =====================================================
+  // SAFE EVALUATION
+  // =====================================================
+
+  const evaluation =
+    result?.evaluation || {};
+
+  const evaluationKey = String(
+    evaluation?.status || "REVIEW"
+  ).toUpperCase() as EvaluationKey;
+
   const evalCfg =
-    EVALUATION_CONFIG[evaluationKey] ?? EVALUATION_CONFIG.REVIEW;
+    EVALUATION_CONFIG[evaluationKey] ??
+    EVALUATION_CONFIG.REVIEW;
 
-  const structured = result.structured || {};
+  // =====================================================
+  // SAFE DATA
+  // =====================================================
 
-  // 🔥 AI SCORE + BREAKDOWN
+  const structured =
+    result?.structured || {};
+
   const score =
-    result.score ?? Math.floor((result.confidence || 0.75) * 100);
+    evaluation?.score ??
+    0;
 
-  const breakdown = {
-    technical: Math.round(score * 0.5),
-    financial: Math.round(score * 0.3),
-    compliance: Math.round(score * 0.2),
-  };
+  const confidence =
+    evaluation?.confidence ??
+    0;
+
+  const breakdown =
+    evaluation?.breakdown || {
+      technical: Math.round(score * 0.5),
+      financial: Math.round(score * 0.3),
+      compliance: Math.round(score * 0.2),
+    };
+
+  const explanation =
+    evaluation?.explanation ||
+    "AI evaluation completed";
+
+  // =====================================================
+  // UI
+  // =====================================================
 
   return (
     <div className="space-y-8">
 
-      {/* 🔥 HERO VERDICT */}
+      {/* ================================================= */}
+      {/* HERO VERDICT */}
+      {/* ================================================= */}
+
       <div
-        className={`border-2 ${evalCfg.border} ${evalCfg.bg} p-6 flex items-center justify-between`}
+        className={`border-2 ${evalCfg.border} ${evalCfg.bg} p-6 flex items-center justify-between rounded-xl`}
       >
+
         <div className="flex items-center gap-5">
-          <div className={`text-5xl font-bold ${evalCfg.color}`}>
+
+          <div
+            className={`text-5xl font-bold ${evalCfg.color}`}
+          >
             {evalCfg.icon}
           </div>
 
           <div>
+
             <div
               className={`text-2xl font-bold tracking-widest ${evalCfg.color}`}
             >
@@ -76,174 +119,155 @@ export function ResultView({ result }: ResultViewProps) {
             >
               {evalCfg.desc}
             </p>
+
           </div>
         </div>
 
         {/* CONFIDENCE */}
+
         <div className="text-right">
-          <div className="text-xs text-gray-500">Confidence</div>
-          <div className="text-xl font-bold text-gov-navy">
-            {result.confidence
-              ? `${Math.round(result.confidence * 100)}%`
-              : "—"}
+
+          <div className="text-xs text-gray-500">
+            Confidence
           </div>
+
+          <div className="text-xl font-bold text-gov-navy">
+            {confidence}%
+          </div>
+
         </div>
       </div>
 
-      {/* 🔥 AI SCORE PANEL */}
-      <div className="gov-card p-4">
-        <div className="gov-section-title">AI Evaluation Score</div>
+      {/* ================================================= */}
+      {/* SCORE PANEL */}
+      {/* ================================================= */}
 
-        <div className="text-2xl font-bold text-gov-navy mb-3">
+      <div className="gov-card p-4 rounded-xl border">
+
+        <div className="gov-section-title">
+          AI Evaluation Score
+        </div>
+
+        <div className="text-3xl font-bold text-gov-navy mb-4">
           {score}/100
         </div>
 
-        <div className="space-y-3 text-sm">
+        <div className="space-y-4 text-sm">
 
-          {/* Technical */}
+          {/* TECHNICAL */}
+
           <div>
-            <div className="flex justify-between">
+
+            <div className="flex justify-between mb-1">
               <span>Technical</span>
-              <span>{breakdown.technical}/50</span>
+              <span>{breakdown.technical}</span>
             </div>
-            <div className="h-2 bg-gray-200 rounded">
+
+            <div className="w-full bg-gray-200 h-2 rounded-full overflow-hidden">
               <div
-                style={{ width: `${(breakdown.technical / 50) * 100}%` }}
-                className="h-2 bg-blue-500 rounded"
+                className="bg-blue-600 h-2"
+                style={{
+                  width: `${breakdown.technical}%`,
+                }}
               />
             </div>
+
           </div>
 
-          {/* Financial */}
+          {/* FINANCIAL */}
+
           <div>
-            <div className="flex justify-between">
+
+            <div className="flex justify-between mb-1">
               <span>Financial</span>
-              <span>{breakdown.financial}/30</span>
+              <span>{breakdown.financial}</span>
             </div>
-            <div className="h-2 bg-gray-200 rounded">
+
+            <div className="w-full bg-gray-200 h-2 rounded-full overflow-hidden">
               <div
-                style={{ width: `${(breakdown.financial / 30) * 100}%` }}
-                className="h-2 bg-green-500 rounded"
+                className="bg-green-600 h-2"
+                style={{
+                  width: `${breakdown.financial}%`,
+                }}
               />
             </div>
+
           </div>
 
-          {/* Compliance */}
+          {/* COMPLIANCE */}
+
           <div>
-            <div className="flex justify-between">
+
+            <div className="flex justify-between mb-1">
               <span>Compliance</span>
-              <span>{breakdown.compliance}/20</span>
+              <span>{breakdown.compliance}</span>
             </div>
-            <div className="h-2 bg-gray-200 rounded">
+
+            <div className="w-full bg-gray-200 h-2 rounded-full overflow-hidden">
               <div
-                style={{ width: `${(breakdown.compliance / 20) * 100}%` }}
-                className="h-2 bg-yellow-500 rounded"
+                className="bg-yellow-500 h-2"
+                style={{
+                  width: `${breakdown.compliance}%`,
+                }}
               />
             </div>
+
           </div>
 
         </div>
       </div>
 
-      {/* 🔥 KEY INSIGHTS */}
-      <div>
-        <div className="gov-section-title">Key Extracted Insights</div>
+      {/* ================================================= */}
+      {/* EXPLANATION */}
+      {/* ================================================= */}
 
-        <div className="grid md:grid-cols-2 gap-4">
-          {Object.entries(structured).map(([key, value]) => (
-            <div key={key} className="border p-4 bg-white">
-              <div className="text-xs text-gray-500 uppercase tracking-wide mb-1">
-                {key.replace(/_/g, " ")}
-              </div>
-              <div className="text-sm font-semibold text-gov-navy break-words">
-                {typeof value === "object"
-                  ? JSON.stringify(value)
-                  : String(value)}
-              </div>
-            </div>
-          ))}
+      <div className="gov-card p-4 rounded-xl border">
+
+        <div className="gov-section-title mb-3">
+          AI Explanation
         </div>
+
+        <p className="text-sm text-gray-700 leading-7">
+          {explanation}
+        </p>
+
       </div>
 
-      {/* 🔥 RULE CHECKS */}
-      {result.rules_checked && (
-        <div>
-          <div className="gov-section-title">Eligibility Breakdown</div>
+      {/* ================================================= */}
+      {/* STRUCTURED DATA */}
+      {/* ================================================= */}
 
-          <div className="space-y-2">
-            {result.rules_checked.map((rule: any, i: number) => (
+      <div className="gov-card p-4 rounded-xl border">
+
+        <div className="gov-section-title mb-3">
+          Extracted Information
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+
+          {Object.entries(structured).map(
+            ([key, value]) => (
+
               <div
-                key={i}
-                className="flex items-center justify-between text-xs border px-3 py-2"
+                key={key}
+                className="border rounded-lg p-3 bg-gray-50"
               >
-                <span className="text-gray-700">{rule.rule}</span>
 
-                <span
-                  className={`font-bold ${
-                    rule.result === "pass"
-                      ? "text-green-700"
-                      : rule.result === "fail"
-                      ? "text-red-700"
-                      : "text-yellow-700"
-                  }`}
-                >
-                  {rule.result.toUpperCase()}
-                </span>
+                <div className="font-semibold text-gray-500 uppercase text-xs mb-1">
+                  {key.replace(/_/g, " ")}
+                </div>
+
+                <div className="text-gray-800 break-words">
+                  {String(value || "—")}
+                </div>
+
               </div>
-            ))}
-          </div>
+            )
+          )}
+
         </div>
-      )}
 
-      {/* 🔥 AI EXPLANATION */}
-      {result.explanation && (
-        <div>
-          <div className="gov-section-title">AI Decision Explanation</div>
-
-          <div className="gov-card p-4 text-sm text-gray-700 leading-relaxed">
-            {result.explanation}
-          </div>
-        </div>
-      )}
-
-      {/* 🔥 OCR TEXT */}
-      <div>
-        <div className="gov-section-title">Raw OCR Output</div>
-
-        <div className="gov-card border">
-          <div className="bg-gray-50 border-b px-4 py-2 flex justify-between">
-            <span className="text-xs text-gray-500 font-mono">
-              ocr_output.txt
-            </span>
-
-            <button
-              onClick={() => navigator.clipboard.writeText(result.ocr_text)}
-              className="text-xs text-gov-blue hover:underline"
-            >
-              Copy
-            </button>
-          </div>
-
-          <div className="p-4">
-            <pre className="ocr-scroll text-gray-700">
-              {result.ocr_text || "(No OCR text)"}
-            </pre>
-          </div>
-        </div>
       </div>
-
-      {/* 🔥 RAW JSON */}
-      <details className="gov-card border">
-        <summary className="cursor-pointer px-4 py-3 text-xs font-bold text-gov-navy">
-          View Raw Structured JSON
-        </summary>
-
-        <div className="p-4 border-t">
-          <pre className="ocr-scroll text-gray-700 text-xs">
-            {JSON.stringify(structured, null, 2)}
-          </pre>
-        </div>
-      </details>
     </div>
   );
 }
