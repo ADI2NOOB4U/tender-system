@@ -34,7 +34,9 @@ const EVALUATION_CONFIG = {
 };
 
 export function ResultView({ result }: ResultViewProps) {
-  const evaluationKey = (result.evaluation || "REVIEW").toUpperCase();
+  type EvaluationKey = keyof typeof EVALUATION_CONFIG;
+  const evaluationKey = String(result.evaluation || "REVIEW")
+    .toUpperCase() as EvaluationKey;
   const evalCfg =
     EVALUATION_CONFIG[evaluationKey] ?? EVALUATION_CONFIG.REVIEW;
 
