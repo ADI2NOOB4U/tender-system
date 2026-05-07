@@ -1,21 +1,20 @@
 import os
 import logging
 
+from dotenv import load_dotenv
+
+# =========================================================
+# LOAD ENV FIRST
+# =========================================================
+
+load_dotenv()
+
+# =========================================================
+# FASTAPI IMPORTS
+# =========================================================
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-
-# =========================================================
-# ENV LOADING
-# =========================================================
-
-try:
-    from dotenv import load_dotenv
-
-    load_dotenv()
-
-except Exception:
-    print("⚠️ dotenv not loaded")
-
 
 # =========================================================
 # LOGGING
@@ -23,7 +22,6 @@ except Exception:
 
 logging.basicConfig(
     level=logging.INFO,
-
     format=(
         "%(asctime)s | "
         "%(levelname)s | "
@@ -34,6 +32,16 @@ logging.basicConfig(
 
 logger = logging.getLogger(__name__)
 
+# =========================================================
+# DEBUG ENV
+# =========================================================
+
+REDIS_URL = os.getenv("REDIS_URL")
+
+if REDIS_URL:
+    logger.info("[ENV] REDIS_URL loaded successfully")
+else:
+    logger.warning("[ENV] REDIS_URL missing")
 
 # =========================================================
 # APP INIT
@@ -49,7 +57,6 @@ app = FastAPI(
 
     version="1.0.0"
 )
-
 
 # =========================================================
 # CORS CONFIG
@@ -82,12 +89,12 @@ logger.info(
     f"[APP] CORS configured: {allowed_origins}"
 )
 
-
 # =========================================================
 # ROUTE IMPORTS
 # =========================================================
 
 try:
+
     from app.routes import (
         upload,
         job,
@@ -98,12 +105,12 @@ try:
     logger.info("[APP] Routes imported")
 
 except Exception as e:
+
     logger.error(
         f"[APP] Route import failed: {str(e)}"
     )
 
     raise
-
 
 # =========================================================
 # ROUTE REGISTRATION
@@ -135,14 +142,15 @@ app.include_router(
 
 logger.info("[APP] Routers registered")
 
-
 # =========================================================
 # ROOT
 # =========================================================
 
 @app.get("/")
 def root():
+
     return {
+
         "success": True,
 
         "message": "TenderLens AI API running",
@@ -150,39 +158,46 @@ def root():
         "version": "1.0.0"
     }
 
-
 # =========================================================
 # HEALTH CHECK
 # =========================================================
 
 @app.get("/healthz")
 def health():
+
     return {
+
         "status": "ok",
 
         "service": "TenderLens AI",
 
-        "version": "1.0.0"
+        "version": "1.0.0",
+
+        "redis": (
+            "configured"
+            if REDIS_URL
+            else "missing"
+        )
     }
 
-
 # =========================================================
-# STARTUP EVENT
+# STARTUP
 # =========================================================
 
 @app.on_event("startup")
 async def startup_event():
+
     logger.info(
         "[APP] TenderLens AI backend started"
     )
 
-
 # =========================================================
-# SHUTDOWN EVENT
+# SHUTDOWN
 # =========================================================
 
 @app.on_event("shutdown")
 async def shutdown_event():
+
     logger.info(
         "[APP] TenderLens AI backend stopped"
     )
