@@ -40,7 +40,7 @@ export function ResultView({ result }: ResultViewProps) {
   const evalCfg =
     EVALUATION_CONFIG[evaluationKey] ?? EVALUATION_CONFIG.REVIEW;
 
-  const structured = result.structured_data || {};
+  const structured = result.structured || {};
 
   // 🔥 AI SCORE + BREAKDOWN
   const score =
